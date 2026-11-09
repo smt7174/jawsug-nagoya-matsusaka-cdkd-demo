@@ -40,3 +40,44 @@ npm run destroy:cdkd
 ```
 
 `cdk bootstrap` と `cdkd bootstrap` は事前に 1 回ずつ必要。結果は `bench-results.csv` に追記される。
+
+## 手動で deploy / destroy する場合
+
+`npm run` 経由（上記）を使わず、コマンドを直接実行する手順。時間の計測や `bench-results.csv` への記録は行われない。
+
+### 前提
+- AWS 認証情報が有効であること（`CDK_DEFAULT_ACCOUNT` は CDK CLI が認証情報から自動設定するため、指定不要）
+- `npm install` 済みであること
+- `cdk bootstrap` / `cdkd bootstrap` 済みであること（アカウント・リージョンごとに 1 回）
+
+### 必ず指定するもの
+- `-c deployer=<cfn|cdkd>` … 省略すると `cfn` 扱いになる
+- スタック名 `DemoStack-<deployer>` … 省略すると、synth されたスタックすべてが対象になる
+
+### CloudFormation
+
+```bash
+npx cdk deploy  -c deployer=cfn DemoStack-cfn --require-approval never
+npx cdk destroy -c deployer=cfn DemoStack-cfn --force
+```
+
+### cdkd
+
+```bash
+npx cdkd deploy  -c deployer=cdkd DemoStack-cdkd
+npx cdkd deploy  -c deployer=cdkd DemoStack-cdkd --no-wait   # 安定待ちを省略（最速）
+npx cdkd destroy -c deployer=cdkd DemoStack-cdkd --force
+```
+
+> cdkd のオプション（`-c`、`--force` など）が cdk と同じように通るかは、実機での確認が必要。
+
+### 時間を測る・動作確認する
+- 時間: `time npx cdk deploy …` のように `time` を付ける。`cdk deploy` が出す「Deployment time」はアセットのアップロード等を含まない
+- 動作確認: デプロイ終了時の `Outputs` に出る `ApiUrl` を `curl` で呼ぶ。S3 2 つ・DynamoDB 2 つの `count: 0` が返れば正常
+
+### 削除の確認
+```bash
+aws cloudformation list-stacks --region ap-northeast-1 \
+  --query "StackSummaries[?starts_with(StackName,'DemoStack') && StackStatus!='DELETE_COMPLETE'].StackName" --output text
+```
+何も表示されなければ、スタックは残っていない（cdkd の場合は `cdkd list` などで確認）。
