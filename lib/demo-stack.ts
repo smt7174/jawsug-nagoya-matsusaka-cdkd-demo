@@ -5,6 +5,8 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as nodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
 import * as path from 'node:path';
 
@@ -15,6 +17,7 @@ export interface DemoStackProps extends cdk.StackProps {
 
 /**
  * API Gateway -> Lambda -> (S3 x2, DynamoDB x2 読み取り専用)
+ * + 直列に作成される SNS / SQS (デプロイ時間調整用のダミー)
  * スタック定義は cdkd / CloudFormation 共通。deployer だけが異なる。
  */
 export class DemoStack extends cdk.Stack {
@@ -82,6 +85,21 @@ export class DemoStack extends cdk.Stack {
       handler: fn,
       proxy: true,
     });
+
+    // --- デプロイ時間を延ばすためのダミーリソース (SNS / SQS) ---
+    // Lambda からは使わない。addDependency で 1 本の鎖にして直列に作らせる。
+    // Topic1 -> Queue1 -> Topic2 -> Queue2 -> Topic3 -> Queue3
+    const topic1 = new sns.Topic(this, `JAWSUG-MATSUSAKA-Topic1-${props.deployer}`);
+    const queue1 = new sqs.Queue(this, `JAWSUG-MATSUSAKA-Queue1-${props.deployer}`);
+    const topic2 = new sns.Topic(this, `JAWSUG-MATSUSAKA-Topic2-${props.deployer}`);
+    const queue2 = new sqs.Queue(this, `JAWSUG-MATSUSAKA-Queue2-${props.deployer}`);
+    const topic3 = new sns.Topic(this, `JAWSUG-MATSUSAKA-Topic3-${props.deployer}`);
+    const queue3 = new sqs.Queue(this, `JAWSUG-MATSUSAKA-Queue3-${props.deployer}`);
+    queue1.node.addDependency(topic1);
+    topic2.node.addDependency(queue1);
+    queue2.node.addDependency(topic2);
+    topic3.node.addDependency(queue2);
+    queue3.node.addDependency(topic3);
 
     // RemovalPolicy を設定できる全リソースを DESTROY にする(取りこぼし防止)
     cdk.RemovalPolicies.of(this).destroy();
