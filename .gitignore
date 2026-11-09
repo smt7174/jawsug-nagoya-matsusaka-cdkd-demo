@@ -1,0 +1,9 @@
+
+# CDK asset staging directory
+*.d.ts
+*.js
+!jest.config.js
+.cdk.staging
+cdk.out
+node_modules
+bench-results.csv
